@@ -2,11 +2,18 @@
   <div class="card">
     <div class="card-header">
       <div>
-        <h1>Log In</h1>
-        <p>or create a new account!</p>
+        <h1>Create new account</h1>
+        <p>Please fill out the form below</p>
       </div>
     </div>
     <div class="card-body">
+      <input
+        type="text"
+        name="fullname"
+        id="fullname"
+        placeholder="Full Name"
+        autocomplete="off"
+      />
       <input
         type="text"
         name="username"
@@ -15,13 +22,39 @@
         autocomplete="off"
       />
       <input
+        type="text"
+        name="email"
+        id="email"
+        placeholder="E-mail address"
+        autocomplete="off"
+      />
+      <input
         type="password"
         name="password"
         id="password"
         placeholder="Password"
       />
-      <button>Log In</button>
-      <p>Don't have an account? <a href="/register">Register here!</a></p>
+      <input
+        type="password"
+        name="password-repeat"
+        id="password-repeat"
+        placeholder="Repeat password"
+        autocomplete="off"
+      />
+      <input
+        type="date"
+        name="dob"
+        id="dob"
+      />
+      <input
+        type="text"
+        name="fulladdress"
+        id="fulladress"
+        placeholder="Full Address"
+        autocomplete="off"
+      />
+
+      <button>Create new account</button>
     </div>
   </div>
 </main>
@@ -40,14 +73,14 @@
     color: #ffffff;
     border-radius: 32px;
     width: 30rem;
-    height: 70vh;
+    height: fit-content;
   }
 
   .card-header {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 30%;
+    padding: 2rem 0;
     margin-bottom: 1rem;
     text-align: center;
   }
@@ -59,6 +92,7 @@
 
   input[type="text"],
   input[type="password"],
+  input[type="date"],
   button {
     padding: 1rem;
     width: 100%;
@@ -68,7 +102,8 @@
   }
 
   input[type="text"]:focus,
-  input[type="password"]:focus {
+  input[type="password"]:focus,
+  input[type="date"]:focus {
     border: none;
     outline: none;
   }
