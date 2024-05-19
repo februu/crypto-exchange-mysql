@@ -1,3 +1,30 @@
+<script>
+  import { goto } from "$app/navigation";
+
+  let username = "";
+  let password = "";
+
+  const login = async () => {
+    const res = await fetch("http://localhost:3000/api/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        password,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      goto("/dashboard", { state: { username: data.username } });
+    } else {
+      console.error("Failed to log in");
+    }
+  };
+</script>
+
 <main>
   <div class="card">
     <div class="card-header">
@@ -8,6 +35,7 @@
     </div>
     <div class="card-body">
       <input
+        bind:value={username}
         type="text"
         name="username"
         id="username"
@@ -15,12 +43,13 @@
         autocomplete="off"
       />
       <input
+        bind:value={password}
         type="password"
         name="password"
         id="password"
         placeholder="Password"
       />
-      <button>Log In</button>
+      <button on:click={login}>Log In</button>
       <p>Don't have an account? <a href="/register">Register here!</a></p>
     </div>
   </div>

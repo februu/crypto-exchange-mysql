@@ -1,3 +1,47 @@
+<script>
+  import { goto } from "$app/navigation";
+  import Modal from "$lib/components/Modal.svelte";
+
+  let fullname = "";
+  let username = "";
+  let email = "";
+  let password = "";
+  let dob = new Date().toJSON().slice(0, 10);
+  let fulladdress = "";
+
+  let showModal = false;
+  let modalTitle = "";
+  let modalmessage = "";
+
+  const register = async () => {
+    const res = await fetch("http://localhost:3000/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fullname,
+        username,
+        email,
+        password,
+        dob,
+        fulladdress,
+      }),
+    });
+
+    const data = await res.json();
+    console.log(data);
+    modalTitle = data.title;
+    modalmessage = data.message;
+    showModal = true;
+    if (res.ok) {
+      setTimeout(() => {
+        goto("/");
+      }, 3000);
+    }
+  };
+</script>
+
 <main>
   <div class="card">
     <div class="card-header">
@@ -8,6 +52,7 @@
     </div>
     <div class="card-body">
       <input
+        bind:value={fullname}
         type="text"
         name="fullname"
         id="fullname"
@@ -15,6 +60,7 @@
         autocomplete="off"
       />
       <input
+        bind:value={username}
         type="text"
         name="username"
         id="username"
@@ -22,6 +68,7 @@
         autocomplete="off"
       />
       <input
+        bind:value={email}
         type="text"
         name="email"
         id="email"
@@ -29,6 +76,7 @@
         autocomplete="off"
       />
       <input
+        bind:value={password}
         type="password"
         name="password"
         id="password"
@@ -42,11 +90,13 @@
         autocomplete="off"
       />
       <input
+        bind:value={dob}
         type="date"
         name="dob"
         id="dob"
       />
       <input
+        bind:value={fulladdress}
         type="text"
         name="fulladdress"
         id="fulladress"
@@ -54,9 +104,17 @@
         autocomplete="off"
       />
 
-      <button>Create new account</button>
+      <button on:click={register}>Create new account</button>
     </div>
   </div>
+
+  {#if showModal}
+    <Modal
+      title={modalTitle}
+      message={modalmessage}
+      ><button on:click={() => (showModal = false)}>Close</button></Modal
+    >
+  {/if}
 </main>
 
 <style>
@@ -113,6 +171,7 @@
     color: #ffffff;
     border-radius: 32px;
     cursor: pointer;
+    margin-bottom: 0rem;
   }
 
   button:hover {

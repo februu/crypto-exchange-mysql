@@ -1,13 +1,25 @@
+```sql
 CREATE DATABASE crypto_exchange;
-USE crypto_exchange;
+```
 
+```sql
+USE crypto_exchange;
+```
+
+### Account_Types
+
+```sql
 CREATE TABLE Account_Types (
     type_id INT AUTO_INCREMENT PRIMARY KEY,
     type_name VARCHAR(50) UNIQUE NOT NULL,
     description VARCHAR(255) NOT NULL,
     fee_rate DECIMAL(10, 8) NOT NULL
 );
+```
 
+### Users
+
+```sql
 CREATE TABLE Users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -18,17 +30,24 @@ CREATE TABLE Users (
     account_status ENUM('active', 'blocked') DEFAULT 'blocked',
     FOREIGN KEY (account_type_id) REFERENCES Account_Types(type_id)
 );
+```
 
+### Coins
+
+```sql
 CREATE TABLE Coins (
     coin_id INT AUTO_INCREMENT PRIMARY KEY,
     coin_name VARCHAR(50) UNIQUE NOT NULL,
     coin_symbol VARCHAR(10) UNIQUE NOT NULL,
     coin_logo_url VARCHAR(255)
 );
-
 ALTER TABLE Coins
 ADD COLUMN type ENUM('crypto', 'fiat') DEFAULT 'crypto';
+```
 
+### Wallets
+
+```sql
 CREATE TABLE Wallets (
     wallet_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -38,7 +57,11 @@ CREATE TABLE Wallets (
     FOREIGN KEY (coin_id) REFERENCES Coins(coin_id),
     UNIQUE(user_id, coin_id)
 );
+```
 
+### Active_orders
+
+```sql
 CREATE TABLE Active_orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -50,7 +73,11 @@ CREATE TABLE Active_orders (
     FOREIGN KEY (user_id) REFERENCES Users(user_id),
     FOREIGN KEY (coin_id) REFERENCES Coins(coin_id)
 );
+```
 
+### Transactions
+
+```sql
 CREATE TABLE Transactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
     buyer_id INT NOT NULL,
@@ -63,7 +90,11 @@ CREATE TABLE Transactions (
     FOREIGN KEY (seller_id) REFERENCES Users(user_id),
     FOREIGN KEY (coin_id) REFERENCES Coins(coin_id)
 );
+```
 
+### KYC_Data
+
+```sql
 CREATE TABLE KYC_Data (
     kyc_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -72,7 +103,11 @@ CREATE TABLE KYC_Data (
     address VARCHAR(255) NOT NULL,
     FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );
+```
 
+### Wallet_Transactions
+
+```sql
 CREATE TABLE Wallet_Transactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -83,25 +118,36 @@ CREATE TABLE Wallet_Transactions (
     FOREIGN KEY (user_id) REFERENCES Users(user_id),
     FOREIGN KEY (coin_id) REFERENCES Coins(coin_id)
 );
+```
 
-INSERT INTO Account_Types (type_name, description, fee_rate) VALUES 
+### Insert Data
+
+```sql
+INSERT INTO Account_Types (type_name, description, fee_rate) VALUES
 ('Basic', 'Basic account', 0.0025),
 ('Professional', 'Professional account with lower fees', 0.001);
 
-INSERT INTO Coins (coin_name, coin_symbol, coin_logo_url, type) VALUES 
+INSERT INTO Coins (coin_name, coin_symbol, coin_logo_url, type) VALUES
 ('Złoty', 'PLN', '', 'fiat'),
 ('Bitcoin', 'BTC', 'https://upload.wikimedia.org/wikipedia/commons/4/46/Bitcoin.svg', 'crypto'),
 ('Ethereum', 'ETH', 'https://upload.wikimedia.org/wikipedia/commons/0/05/Ethereum_logo_2014.svg', 'crypto'),
 ('Ripple', 'XRP', 'https://altcoinsbox.com/wp-content/uploads/2023/09/xrp-logo-white-background.svg', 'crypto'),
 ('Litecoin', 'LTC', 'https://upload.wikimedia.org/wikipedia/commons/1/1c/Litecoin.svg', 'crypto');
+```
 
+### All_Crypto_Coins
+
+```sql
 CREATE VIEW All_Crypto_Coins AS
 SELECT *
 FROM Coins
 WHERE type = 'crypto';
+```
 
+### GetUserAssets
+
+```sql
 DELIMITER //
-
 CREATE PROCEDURE GetUserAssets(IN userId INT)
 BEGIN
     SELECT w.wallet_id, w.user_id, c.coin_name, c.coin_symbol, w.balance
@@ -109,11 +155,13 @@ BEGIN
     JOIN Coins c ON w.coin_id = c.coin_id
     WHERE w.user_id = userId;
 END //
-
 DELIMITER ;
+```
 
+### MatchOrders
+
+```sql
 DELIMITER //
-
 CREATE PROCEDURE MatchOrders()
 BEGIN
     DECLARE done INT DEFAULT 0;
@@ -126,59 +174,49 @@ BEGIN
     DECLARE sellQuantity DECIMAL(20, 8);
     DECLARE buyPrice DECIMAL(20, 8);
     DECLARE sellPrice DECIMAL(20, 8);
-    
-    DECLARE cur CURSOR FOR 
+
+    DECLARE cur CURSOR FOR
         SELECT o1.order_id, o1.user_id, o1.coin_id, o1.quantity, o1.price, o2.order_id, o2.user_id, o2.quantity, o2.price
         FROM Active_orders o1
         JOIN Active_orders o2 ON o1.coin_id = o2.coin_id AND o1.price = o2.price
         WHERE o1.order_type = 'buy' AND o2.order_type = 'sell';
-
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
-
     OPEN cur;
-
     read_loop: LOOP
         FETCH cur INTO buyOrderId, buyUserId, coinId, buyQuantity, buyPrice, sellOrderId, sellUserId, sellQuantity, sellPrice;
         IF done THEN
             LEAVE read_loop;
         END IF;
-
         IF buyQuantity = sellQuantity THEN
-            INSERT INTO Transactions (buyer_id, seller_id, coin_id, quantity, price) 
+            INSERT INTO Transactions (buyer_id, seller_id, coin_id, quantity, price)
             VALUES (buyUserId, sellUserId, coinId, buyQuantity, buyPrice);
-
             DELETE FROM Active_orders WHERE order_id = buyOrderId;
             DELETE FROM Active_orders WHERE order_id = sellOrderId;
-
         ELSEIF buyQuantity < sellQuantity THEN
-            INSERT INTO Transactions (buyer_id, seller_id, coin_id, quantity, price) 
+            INSERT INTO Transactions (buyer_id, seller_id, coin_id, quantity, price)
             VALUES (buyUserId, sellUserId, coinId, buyQuantity, buyPrice);
-
             DELETE FROM Active_orders WHERE order_id = buyOrderId;
-
-            UPDATE Active_orders 
-            SET quantity = sellQuantity - buyQuantity 
+            UPDATE Active_orders
+            SET quantity = sellQuantity - buyQuantity
             WHERE order_id = sellOrderId;
-
         ELSEIF buyQuantity > sellQuantity THEN
-            INSERT INTO Transactions (buyer_id, seller_id, coin_id, quantity, price) 
+            INSERT INTO Transactions (buyer_id, seller_id, coin_id, quantity, price)
             VALUES (buyUserId, sellUserId, coinId, sellQuantity, sellPrice);
-
             DELETE FROM Active_orders WHERE order_id = sellOrderId;
-
-            UPDATE Active_orders 
-            SET quantity = buyQuantity - sellQuantity 
+            UPDATE Active_orders
+            SET quantity = buyQuantity - sellQuantity
             WHERE order_id = buyOrderId;
         END IF;
     END LOOP;
-
     CLOSE cur;
 END //
-
 DELIMITER ;
+```
 
+### after_insert_transactions
+
+```sql
 DELIMITER //
-
 CREATE TRIGGER after_insert_transactions
 AFTER INSERT ON Transactions
 FOR EACH ROW
@@ -188,32 +226,27 @@ BEGIN
     DECLARE buyerFeeRate DECIMAL(10, 8);
     DECLARE sellerFeeRate DECIMAL(10, 8);
     DECLARE buyerPayment DECIMAL(20, 8);
-    
+
     -- Retrieve the fee rate for the buyer
     SELECT at.fee_rate INTO buyerFeeRate
     FROM Users u
     JOIN Account_Types at ON u.account_type_id = at.type_id
     WHERE u.user_id = NEW.buyer_id;
-
     -- Retrieve the fee rate for the seller
     SELECT at.fee_rate INTO sellerFeeRate
     FROM Users u
     JOIN Account_Types at ON u.account_type_id = at.type_id
     WHERE u.user_id = NEW.seller_id;
-
     -- Calculate net quantities after fees
     SET buyerPayment = NEW.quantity * NEW.price * (1 + buyerFeeRate);
-
     -- Deduct the payment from the buyer's wallet of the coin type
     UPDATE Wallets
     SET balance = balance - buyerPayment
     WHERE user_id = NEW.buyer_id AND coin_id = 1;
-
     -- Retrieve the fiat wallet ID of the seller
     SELECT wallet_id INTO sellerFiatWalletId
     FROM Wallets
     WHERE user_id = NEW.seller_id AND coin_id = 1;
-
     -- If the seller's fiat wallet exists, add the payment to it
     IF sellerFiatWalletId IS NOT NULL THEN
         UPDATE Wallets
@@ -225,11 +258,13 @@ BEGIN
         VALUES (NEW.seller_id, 1, NEW.quantity * NEW.price);
     END IF;
 END //
-
 DELIMITER ;
+```
 
+### before_insert_active_orders
+
+```sql
 DELIMITER //
-
 CREATE TRIGGER before_insert_active_orders
 BEFORE INSERT ON Active_orders
 FOR EACH ROW
@@ -238,22 +273,22 @@ BEGIN
     DECLARE orderValue DECIMAL(20, 8);
     DECLARE requiredBalance DECIMAL(20, 8);
     DECLARE coinType VARCHAR(10);
-    
+
     SELECT type INTO coinType
     FROM Coins
     WHERE coin_id = NEW.coin_id;
-    
+
     IF NEW.order_type = 'sell' THEN
         IF coinType = 'crypto' THEN
             SELECT balance INTO userBalance
             FROM Wallets
             WHERE user_id = NEW.user_id AND coin_id = NEW.coin_id;
-            
+
             IF userBalance IS NULL OR userBalance < NEW.quantity THEN
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient coins to sell';
             END IF;
         ELSE
-          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot sell fiat currencies.';
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot sell fiat currencies.';
         END IF;
     ELSEIF NEW.order_type = 'buy' THEN
         IF coinType = 'crypto' THEN
@@ -267,35 +302,37 @@ BEGIN
                     WHERE user_id = NEW.user_id
                 )
             )) INTO requiredBalance;
-            
+
             SELECT balance INTO userBalance
             FROM Wallets
             WHERE user_id = NEW.user_id AND coin_id = 1;
-            
+
             IF userBalance IS NULL OR userBalance < requiredBalance THEN
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient funds to buy';
             END IF;
-          ELSE
-          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot buy fiat currencies.';
+        ELSE
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot buy fiat currencies.';
         END IF;
     END IF;
 END //
-
 DELIMITER ;
+```
 
+### after_insert_wallet_transactions
+
+```sql
 DELIMITER //
-
 CREATE TRIGGER after_insert_wallet_transactions
 AFTER INSERT ON Wallet_Transactions
 FOR EACH ROW
 BEGIN
     DECLARE walletId INT;
-    
+
     -- Find the wallet ID for the user and coin
     SELECT wallet_id INTO walletId
     FROM Wallets
     WHERE user_id = NEW.user_id AND coin_id = NEW.coin_id;
-    
+
     IF NEW.transaction_type = 'deposit' THEN
         IF walletId IS NOT NULL THEN
             -- If the wallet exists, update the balance by adding the amount
@@ -320,5 +357,5 @@ BEGIN
         END IF;
     END IF;
 END //
-
 DELIMITER ;
+```

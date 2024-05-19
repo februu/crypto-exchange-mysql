@@ -18,6 +18,6 @@
   }
 
   :global(a:hover) {
-    color: 316d79;
+    color: #316d79;
   }
 </style>
