@@ -11,7 +11,7 @@
 
   let showModal = false;
   let modalTitle = "";
-  let modalmessage = "";
+  let modalMessage = "";
 
   const register = async () => {
     const res = await fetch("http://localhost:3000/api/register", {
@@ -30,9 +30,8 @@
     });
 
     const data = await res.json();
-    console.log(data);
     modalTitle = data.title;
-    modalmessage = data.message;
+    modalMessage = data.message;
     showModal = true;
     if (res.ok) {
       setTimeout(() => {
@@ -111,7 +110,7 @@
   {#if showModal}
     <Modal
       title={modalTitle}
-      message={modalmessage}
+      message={modalMessage}
       ><button on:click={() => (showModal = false)}>Close</button></Modal
     >
   {/if}

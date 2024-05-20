@@ -128,7 +128,7 @@ INSERT INTO Account_Types (type_name, description, fee_rate) VALUES
 ('Professional', 'Professional account with lower fees', 0.001);
 
 INSERT INTO Coins (coin_name, coin_symbol, coin_logo_url, type) VALUES
-('Złoty', 'PLN', '', 'fiat'),
+('Złoty', 'PLN', 'https://www.svgrepo.com/show/242317/poland.svg', 'fiat'),
 ('Bitcoin', 'BTC', 'https://upload.wikimedia.org/wikipedia/commons/4/46/Bitcoin.svg', 'crypto'),
 ('Ethereum', 'ETH', 'https://upload.wikimedia.org/wikipedia/commons/0/05/Ethereum_logo_2014.svg', 'crypto'),
 ('Ripple', 'XRP', 'https://altcoinsbox.com/wp-content/uploads/2023/09/xrp-logo-white-background.svg', 'crypto'),
@@ -265,6 +265,7 @@ DELIMITER ;
 
 ```sql
 DELIMITER //
+
 CREATE TRIGGER before_insert_active_orders
 BEFORE INSERT ON Active_orders
 FOR EACH ROW
@@ -273,6 +274,16 @@ BEGIN
     DECLARE orderValue DECIMAL(20, 8);
     DECLARE requiredBalance DECIMAL(20, 8);
     DECLARE coinType VARCHAR(10);
+    DECLARE accountStatus ENUM('active', 'blocked');
+
+    -- Check the user's account status
+    SELECT account_status INTO accountStatus
+    FROM Users
+    WHERE user_id = NEW.user_id;
+
+    IF accountStatus != 'active' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Account is blocked.';
+    END IF;
 
     SELECT type INTO coinType
     FROM Coins
@@ -288,7 +299,7 @@ BEGIN
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient coins to sell';
             END IF;
         ELSE
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot sell fiat currencies.';
+          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot sell fiat currencies.';
         END IF;
     ELSEIF NEW.order_type = 'buy' THEN
         IF coinType = 'crypto' THEN
@@ -310,11 +321,12 @@ BEGIN
             IF userBalance IS NULL OR userBalance < requiredBalance THEN
                 SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient funds to buy';
             END IF;
-        ELSE
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot buy fiat currencies.';
+          ELSE
+          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot buy fiat currencies.';
         END IF;
     END IF;
 END //
+
 DELIMITER ;
 ```
 
@@ -357,5 +369,31 @@ BEGIN
         END IF;
     END IF;
 END //
+DELIMITER ;
+```
+
+```sql
+DELIMITER //
+
+CREATE PROCEDURE GetHighestBuyPrice(IN coin_id_param INT)
+BEGIN
+    SELECT MAX(price) AS highest_buy_price
+    FROM Active_orders
+    WHERE coin_id = coin_id_param AND order_type = 'buy';
+END //
+
+DELIMITER ;
+```
+
+```sql
+DELIMITER //
+
+CREATE PROCEDURE GetLowestSellPrice(IN coin_id_param INT)
+BEGIN
+    SELECT MIN(price) AS lowest_sell_price
+    FROM Active_orders
+    WHERE coin_id = coin_id_param AND order_type = 'sell';
+END //
+
 DELIMITER ;
 ```

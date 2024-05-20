@@ -89,7 +89,7 @@ INSERT INTO Account_Types (type_name, description, fee_rate) VALUES
 ('Professional', 'Professional account with lower fees', 0.001);
 
 INSERT INTO Coins (coin_name, coin_symbol, coin_logo_url, type) VALUES 
-('Złoty', 'PLN', '', 'fiat'),
+('Złoty', 'PLN', 'https://www.svgrepo.com/show/242317/poland.svg', 'fiat'),
 ('Bitcoin', 'BTC', 'https://upload.wikimedia.org/wikipedia/commons/4/46/Bitcoin.svg', 'crypto'),
 ('Ethereum', 'ETH', 'https://upload.wikimedia.org/wikipedia/commons/0/05/Ethereum_logo_2014.svg', 'crypto'),
 ('Ripple', 'XRP', 'https://altcoinsbox.com/wp-content/uploads/2023/09/xrp-logo-white-background.svg', 'crypto'),
@@ -126,12 +126,13 @@ BEGIN
     DECLARE sellQuantity DECIMAL(20, 8);
     DECLARE buyPrice DECIMAL(20, 8);
     DECLARE sellPrice DECIMAL(20, 8);
-    
+
     DECLARE cur CURSOR FOR 
         SELECT o1.order_id, o1.user_id, o1.coin_id, o1.quantity, o1.price, o2.order_id, o2.user_id, o2.quantity, o2.price
         FROM Active_orders o1
-        JOIN Active_orders o2 ON o1.coin_id = o2.coin_id AND o1.price = o2.price
-        WHERE o1.order_type = 'buy' AND o2.order_type = 'sell';
+        JOIN Active_orders o2 ON o1.coin_id = o2.coin_id AND o2.price <= o1.price
+        WHERE o1.order_type = 'buy' AND o2.order_type = 'sell'
+        ORDER BY o1.price DESC, o1.created_at ASC, o2.price ASC, o2.created_at ASC;
 
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
@@ -184,11 +185,12 @@ AFTER INSERT ON Transactions
 FOR EACH ROW
 BEGIN
     DECLARE buyerWalletId INT;
-    DECLARE sellerFiatWalletId INT;
+    DECLARE sellerWalletId INT;
     DECLARE buyerFeeRate DECIMAL(10, 8);
     DECLARE sellerFeeRate DECIMAL(10, 8);
     DECLARE buyerPayment DECIMAL(20, 8);
-    
+    DECLARE sellerReceive DECIMAL(20, 8);
+
     -- Retrieve the fee rate for the buyer
     SELECT at.fee_rate INTO buyerFeeRate
     FROM Users u
@@ -201,29 +203,40 @@ BEGIN
     JOIN Account_Types at ON u.account_type_id = at.type_id
     WHERE u.user_id = NEW.seller_id;
 
-    -- Calculate net quantities after fees
+    -- Calculate the payment amount including the buyer's fee
     SET buyerPayment = NEW.quantity * NEW.price * (1 + buyerFeeRate);
 
-    -- Deduct the payment from the buyer's wallet of the coin type
+    -- Calculate the amount the seller will receive after fees
+    SET sellerReceive = NEW.quantity * NEW.price * (1 - sellerFeeRate);
+
+    -- Deduct the payment from the buyer's fiat wallet (assuming USD coin_id = 1)
     UPDATE Wallets
     SET balance = balance - buyerPayment
     WHERE user_id = NEW.buyer_id AND coin_id = 1;
 
-    -- Retrieve the fiat wallet ID of the seller
-    SELECT wallet_id INTO sellerFiatWalletId
-    FROM Wallets
+    -- Add the received amount to the seller's fiat wallet (assuming USD coin_id = 1)
+    UPDATE Wallets
+    SET balance = balance + sellerReceive
     WHERE user_id = NEW.seller_id AND coin_id = 1;
 
-    -- If the seller's fiat wallet exists, add the payment to it
-    IF sellerFiatWalletId IS NOT NULL THEN
+    -- Deduct the sold amount from the seller's crypto wallet
+    UPDATE Wallets
+    SET balance = balance - NEW.quantity
+    WHERE user_id = NEW.seller_id AND coin_id = NEW.coin_id;
+
+    -- Add the bought amount to the buyer's crypto wallet
+    SET buyerWalletId = (SELECT wallet_id FROM Wallets WHERE user_id = NEW.buyer_id AND coin_id = NEW.coin_id);
+    
+    IF buyerWalletId IS NOT NULL THEN
         UPDATE Wallets
-        SET balance = balance + NEW.quantity * NEW.price
-        WHERE wallet_id = sellerFiatWalletId;
+        SET balance = balance + NEW.quantity
+        WHERE wallet_id = buyerWalletId;
     ELSE
-        -- If the seller's fiat wallet doesn't exist, create one and add the payment to it
+        -- If the buyer's crypto wallet doesn't exist, create one and add the bought amount to it
         INSERT INTO Wallets (user_id, coin_id, balance)
-        VALUES (NEW.seller_id, 1, NEW.quantity * NEW.price);
+        VALUES (NEW.buyer_id, NEW.coin_id, NEW.quantity);
     END IF;
+
 END //
 
 DELIMITER ;
@@ -238,6 +251,16 @@ BEGIN
     DECLARE orderValue DECIMAL(20, 8);
     DECLARE requiredBalance DECIMAL(20, 8);
     DECLARE coinType VARCHAR(10);
+    DECLARE accountStatus ENUM('active', 'blocked');
+
+    -- Check the user's account status
+    SELECT account_status INTO accountStatus
+    FROM Users
+    WHERE user_id = NEW.user_id;
+    
+    IF accountStatus != 'active' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Account is blocked.';
+    END IF;
     
     SELECT type INTO coinType
     FROM Coins
@@ -318,6 +341,51 @@ BEGIN
             INSERT INTO Wallets (user_id, coin_id, balance)
             VALUES (NEW.user_id, NEW.coin_id, -NEW.amount);
         END IF;
+    END IF;
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE GetHighestBuyPrice(IN coin_id_param INT)
+BEGIN
+    SELECT MAX(price) AS highest_buy_price
+    FROM Active_orders
+    WHERE coin_id = coin_id_param AND order_type = 'buy';
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE GetLowestSellPrice(IN coin_id_param INT)
+BEGIN
+    SELECT MIN(price) AS lowest_sell_price
+    FROM Active_orders
+    WHERE coin_id = coin_id_param AND order_type = 'sell';
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE Withdraw(IN user_id INT, IN coin_id INT, IN amount DECIMAL(20, 8))
+BEGIN
+    DECLARE user_balance DECIMAL(20, 8);
+    
+    -- Check the current balance of the user for the given coin
+    SELECT balance INTO user_balance
+    FROM Wallets
+    WHERE user_id = user_id AND coin_id = coin_id;
+    
+    -- If the user's balance is NULL or less than the amount to withdraw, throw an error
+    IF user_balance IS NULL OR user_balance < amount THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance for withdrawal';
+    ELSE
+        -- Insert a new record into the Wallet_Transactions table for the withdrawal
+        INSERT INTO Wallet_Transactions (user_id, coin_id, transaction_type, amount, transaction_date)
+        VALUES (user_id, coin_id, 'withdrawal', amount, NOW());
     END IF;
 END //
 

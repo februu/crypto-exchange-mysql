@@ -1,8 +1,12 @@
 <script>
   import { goto } from "$app/navigation";
+  import Modal from "$lib/components/Modal.svelte";
 
   let username = "";
   let password = "";
+  let modalTitle = "";
+  let modalMessage = "";
+  let showModal = false;
 
   const login = async () => {
     const res = await fetch("http://localhost:3000/api/login", {
@@ -18,9 +22,14 @@
 
     if (res.ok) {
       const data = await res.json();
-      goto("/dashboard", { state: { username: data.username } });
+      sessionStorage.setItem("user_id", data.user_id);
+      sessionStorage.setItem("username", data.username);
+      goto("/dashboard");
     } else {
-      console.error("Failed to log in");
+      const data = await res.json();
+      modalTitle = data.title;
+      modalMessage = data.message;
+      showModal = true;
     }
   };
 </script>
@@ -54,6 +63,14 @@
     </div>
   </div>
 </main>
+
+{#if showModal}
+  <Modal
+    title={modalTitle}
+    message={modalMessage}
+    ><button on:click={() => (showModal = false)}>Close</button></Modal
+  >
+{/if}
 
 <style>
   main {
