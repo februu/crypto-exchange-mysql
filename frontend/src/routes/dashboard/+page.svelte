@@ -4,10 +4,12 @@
   import OrderModal from "$lib/components/OrderModal.svelte";
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
+  import { tick } from "svelte";
 
   let username = "";
   let user_id = "";
   let coins = [];
+  let modalRef;
 
   let showOrderModal = false;
   let modal_coin_id = "";
@@ -34,13 +36,16 @@
   };
 
   const openOrderModal = (coin, order_type) => {
-    console.log(coin);
     showOrderModal = true;
     modal_coin_id = coin.coin_id;
     modal_coin_symbol = coin.coin_symbol;
     modal_coin_name = coin.coin_name;
     modal_coin_logo_url = coin.coin_logo_url;
     modal_order_type = order_type;
+
+    tick().then(() => {
+      modalRef.updatePrice();
+    });
   };
 </script>
 
@@ -68,6 +73,7 @@
 
 {#if showOrderModal}
   <OrderModal
+    bind:this={modalRef}
     coin_logo_url={modal_coin_logo_url}
     coin_id={modal_coin_id}
     coin_symbol={modal_coin_symbol}

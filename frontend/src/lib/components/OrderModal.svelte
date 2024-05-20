@@ -14,18 +14,33 @@
   let quantity = 1;
   $: totalPrice = price * quantity;
 
-  onMount(async () => {
-    let data = await fetch(
-      `http://localhost:3000/api/coin-price/sell/${coin_id}`
-    );
+  export const updatePrice = async () => {
+    if (order_type === "buy") {
+      let data = await fetch(
+        `http://localhost:3000/api/coin-price/sell/${coin_id}`
+      );
 
-    lowestSellPrice = await data.json();
-    lowestSellPrice = lowestSellPrice[0][0].lowest_sell_price;
-    lowestSellPrice === null
-      ? (lowestSellPrice = 0)
-      : (lowestSellPrice = lowestSellPrice);
-    price = lowestSellPrice;
-  });
+      lowestSellPrice = await data.json();
+      console.log(lowestSellPrice);
+      lowestSellPrice = lowestSellPrice[0][0].lowest_sell_price;
+      lowestSellPrice === null
+        ? (lowestSellPrice = 0)
+        : (lowestSellPrice = lowestSellPrice);
+      price = lowestSellPrice;
+    } else if (order_type === "sell") {
+      let data = await fetch(
+        `http://localhost:3000/api/coin-price/buy/${coin_id}`
+      );
+
+      lowestSellPrice = await data.json();
+      console.log(lowestSellPrice);
+      lowestSellPrice = lowestSellPrice[0][0].highest_buy_price;
+      lowestSellPrice === null
+        ? (lowestSellPrice = 0)
+        : (lowestSellPrice = lowestSellPrice);
+      price = lowestSellPrice;
+    }
+  };
 
   const placeOffer = async () => {
     if (quantity <= 0) {
@@ -64,11 +79,13 @@
   {#if order_type === "buy"}
     <h2>Buy {coin_symbol}</h2>
     <p>Buy {coin_name} for PLN.</p>
+    <p class="price">Current lowest ask: {lowestSellPrice} PLN</p>
   {:else if order_type === "sell"}
     <h2>Sell {coin_symbol}</h2>
     <p>Sell {coin_name} for PLN.</p>
+    <p class="price">Current highest bid: {lowestSellPrice} PLN</p>
   {/if}
-  <p class="price">Current price: {lowestSellPrice} PLN</p>
+
   <input
     type="text"
     bind:value={price}
